@@ -1,6 +1,7 @@
-# single_process_async.py
-# 单进程异步模型
+# multi_process_async.py
+# 多进程异步模型
 
+import os
 import json
 import struct
 import socket
@@ -53,13 +54,13 @@ class RPCHandler(asyncore.dispatcher_with_send):
                 break
             length, = struct.unpack("I", length_prefix)
             body = self.rbuf.read(length)
-            # 不足一个消息
+            # 还是半包
             if len(body) < length:
                 break
             request = json.loads(body.decode(encoding="utf-8", errors='strict'))
             in_ = request['in']
             params = request['params']
-            print(in_, params)
+            print(os.getpid(), in_, params)
             handler = self.handlers[in_]
             # 处理消息
             handler(params)
@@ -92,6 +93,21 @@ class RPCServer(asyncore.dispatcher):
         self.set_reuse_addr()
         self.bind((host, port))
         self.listen(1)
+        # 开辟10个子进程
+        self.prefork(10)
+
+    def prefork(self, n):
+        for i in range(n):
+            pid = os.fork()
+            if pid < 0:
+                # fork error
+                return
+            if pid > 0:
+                # parent process
+                continue
+            if pid == 0:
+                # 子进程
+                break
 
     def handle_accept(self):
         pair = self.accept()
